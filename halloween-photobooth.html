@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halloween AI Photobooth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrollbars from the grid layout */
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #8B5CF6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Ensure all grid children maintain aspect ratio set by JS */
+        #photoboothGrid > div {
+            position: relative;
+            background-color: #374151; /* bg-gray-700 */
+            border-radius: 0.5rem; /* rounded-lg */
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .drag-over {
+            outline: 4px dashed #8B5CF6; /* violet-500 */
+            outline-offset: -8px;
+            background-color: #4B5563; /* bg-gray-600 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <main id="photoboothGrid" class="grid grid-cols-3 grid-rows-2 gap-2 p-2 w-screen h-screen">
+        <div>
+            <video id="webcam" class="w-full h-full object-cover" autoplay playsinline></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <div id="countdownOverlay" class="absolute inset-0 flex items-center justify-center text-white text-9xl font-bold bg-black bg-opacity-50 hidden" style="text-shadow: 2px 2px 8px rgba(0,0,0,0.7);"></div>
+            <div id="webcamError" class="absolute text-center text-red-400 hidden p-4">
+                <p>Could not access webcam. Please make sure it's enabled.</p>
+            </div>
+            <button id="capture" class="absolute bottom-4 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-800 font-medium rounded-lg text-lg px-5 py-3.5 text-center disabled:bg-gray-500 disabled:cursor-not-allowed transition-opacity duration-300" disabled>Take Picture</button>
+        </div>
+
+        <div class="group">
+            <img id="generatedImage1" src="https://placehold.co/800x600/374151/4B5563?text=AI+Scene+1" class="w-full h-full object-cover">
+            <a id="download1" class="absolute top-2 right-2 bg-violet-600 hover:bg-violet-700 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg></a>
+        </div>
+
+        <div class="group">
+             <img id="generatedImage2" src="https://placehold.co/800x600/374151/4B5563?text=AI+Scene+2" class="w-full h-full object-cover">
+             <a id="download2" class="absolute top-2 right-2 bg-violet-600 hover:bg-violet-700 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg></a>
+        </div>
+        
+        <div id="originalImageContainer">
+             <img id="originalImage" class="w-full h-full object-cover" src="https://placehold.co/800x600/374151/4B5563?text=Your+Photo" alt="Original user capture">
+             <div id="dragDropOverlay" class="absolute inset-0 flex items-center justify-center text-gray-400 text-lg font-medium pointer-events-none">
+                <p>...or drag & drop image here</p>
+             </div>
+             <div id="manualInputContainer" class="absolute inset-0 p-3 bg-black bg-opacity-75 flex flex-col justify-between hidden">
+                <div>
+                    <label for="manualPromptInput" class="text-sm font-medium text-gray-300 mb-1">Enter Your Background Idea:</label>
+                    <textarea id="manualPromptInput" rows="3" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5" placeholder="e.g., A spooky haunted mansion ballroom..."></textarea>
+                </div>
+                 <button id="generateButton" class="w-full text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Imagine Background</button>
+             </div>
+             <button id="resetButton" class="absolute top-2 left-2 text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center hidden transition-opacity duration-300">Start Over</button>
+        </div>
+
+        <div class="group">
+            <img id="generatedImage3" src="https://placehold.co/800x600/374151/4B5563?text=AI+Scene+3" class="w-full h-full object-cover">
+            <a id="download3" class="absolute top-2 right-2 bg-violet-600 hover:bg-violet-700 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg></a>
+        </div>
+
+        <div class="group">
+            <img id="generatedImage4" src="https://placehold.co/800x600/374151/4B5563?text=AI+Scene+4" class="w-full h-full object-cover">
+            <a id="download4" class="absolute top-2 right-2 bg-violet-600 hover:bg-violet-700 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg></a>
+        </div>
+    </main>
+
+    <div id="statusOverlay" class="fixed inset-0 bg-black bg-opacity-75 flex-col items-center justify-center hidden z-40">
+        <div class="loader"></div>
+        <p id="statusText" class="text-gray-300 text-xl mt-4"></p>
+    </div>
+    
+    <div id="apiKeyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl text-center">
+            <h1 class="text-2xl font-bold text-violet-400 mb-2">Welcome!</h1>
+            <p class="text-gray-400 mt-2 mb-4">Enter your Google AI API Key to start.</p>
+            <input type="password" id="apiKey" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5" placeholder="Enter your API key">
+            <button id="saveApiKey" class="mt-4 w-full text-white bg-violet-600 hover:bg-violet-700 focus:ring-4 focus:outline-none focus:ring-violet-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Save Key & Begin</button>
+        </div>
+    </div>
+    
+    <div id="errorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h3 class="text-lg font-bold text-red-500">An Error Occurred</h3>
+            <p id="errorMessage" class="text-gray-300 mt-2 text-sm"></p>
+            <button id="closeModal" class="mt-4 w-full text-white bg-violet-600 hover:bg-violet-700 focus:ring-4 focus:ring-violet-800 font-medium rounded-lg text-sm px-5 py-2.5">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const webcamElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('canvas');
+        const captureButton = document.getElementById('capture');
+        const statusOverlay = document.getElementById('statusOverlay');
+        const statusText = document.getElementById('statusText');
+        const apiKeyInput = document.getElementById('apiKey');
+        const saveApiKeyButton = document.getElementById('saveApiKey');
+        const apiKeyModal = document.getElementById('apiKeyModal');
+        const originalImage = document.getElementById('originalImage');
+        const originalImageContainer = document.getElementById('originalImageContainer');
+        const dragDropOverlay = document.getElementById('dragDropOverlay');
+        const resetButton = document.getElementById('resetButton');
+        const webcamError = document.getElementById('webcamError');
+        const errorModal = document.getElementById('errorModal');
+        const errorMessage = document.getElementById('errorMessage');
+        const closeModal = document.getElementById('closeModal');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const manualInputContainer = document.getElementById('manualInputContainer');
+        const manualPromptInput = document.getElementById('manualPromptInput');
+        const generateButton = document.getElementById('generateButton');
+
+        const generatedImageElements = [
+            document.getElementById('generatedImage1'),
+            document.getElementById('generatedImage2'),
+            document.getElementById('generatedImage3'),
+            document.getElementById('generatedImage4'),
+        ];
+        const downloadLinkElements = [
+            document.getElementById('download1'),
+            document.getElementById('download2'),
+            document.getElementById('download3'),
+            document.getElementById('download4'),
+        ];
+        
+        let apiKey = '';
+        let capturedImageData = null; // Stores the base64 data *without* the prefix
+
+        // --- Prompt Functions ---
+        function getCostumeDescriptionPrompt() {
+            // Note: This is no longer used in the primary flow, but kept for potential future use
+            return "Describe the halloween costume(s) being worn in this image in one or two short, simple sentences. Who or what are they dressed as? Are they posing in a certain way?";
+        }
+
+        function getBackgroundIdeasPrompt(costumeDescription) {
+            // Note: This is no longer used in the primary flow, but kept for potential future use
+            return `Our actors are dressed & posing as follows: "${costumeDescription}".
+                During the following task, we will interpret their costume and pose in the context of Halloween:
+                Example: if the description says that they are wearing a low-quality soldier costume for halloween, we will instead interpret them as a heroic soldier.
+                So we are catering to their imagination.
+                Imagine the ideal background to put behind them and describe it.
+                We are picking a fun background based on their costume & pose.
+				Add tasteful style references without directly referencing copyrighted content, but much indirect style references.
+                Come up with 4 different ideas for a background scene that would make sense for this character.
+                Provide each background scene description separated by the unique delimiter "###".
+                Example: 'A chaotic pirate ship deck during a kraken attack, with treasure chests sliding around, a few rugged pirates as well, in the style of an iconic drew struzan poster.###A spooky haunted mansion ballroom with ghosts waltzing in the style of a still from a frank frazetta illustration.###A futuristic alien landscape with glowing flora and a spaceship landing and a green alien behind, in the style of a still from 70's or 80's space opera blockbuster.###A moody, rain-slicked cyberpunk city street at night with neon signs reflecting in puddles, in the style of a blade runner concept art.'`;
+        }
+
+        function getFinalImagePrompt(backgroundDescription) {
+            return `Your task is to perform a Hollywood-level, photorealistic composite. Take the people from the original image, preserving their exact costumes and poses. Integrate them flawlessly into this new background scene: '${backgroundDescription}'. The final image MUST look like a single, authentic photograph, indistinguishable from a real photo taken in that location. To achieve this, you must master the lighting by perfectly replicating the new environment's light sources, direction, and color on the subjects. Harmonize colors with professional color grading so their skin tones and clothing match the scene's mood. Create natural, perfectly blended edges with no harsh lines or 'cut-out' artifacts. The final result should be a stunning, completely believable photograph. The main focus of the image should still be the original people.`;
+        }
+
+
+        // --- Core Functions ---
+        function setAspectRatio(ratio) {
+            const cells = document.querySelectorAll('#photoboothGrid > div');
+            cells.forEach(cell => {
+                cell.style.aspectRatio = ratio;
+            });
+        }
+
+        async function setupWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                webcamElement.srcObject = stream;
+                webcamElement.addEventListener('loadedmetadata', () => {
+                    captureButton.disabled = false;
+                    const ratio = webcamElement.videoWidth / webcamElement.videoHeight;
+                    setAspectRatio(ratio);
+                });
+            } catch (err) {
+                console.error("Error accessing webcam: ", err);
+                webcamError.classList.remove('hidden');
+            }
+        }
+
+        function takePicture() {
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = webcamElement.videoWidth;
+            canvasElement.height = webcamElement.videoHeight;
+            context.drawImage(webcamElement, 0, 0, canvasElement.width, canvasElement.height);
+            const dataUrl = canvasElement.toDataURL('image/jpeg');
+            originalImage.src = dataUrl;
+            capturedImageData = dataUrl.split(',')[1];
+            onImageReady();
+        }
+
+        async function callGeminiAPI(prompt, imageData = null, model = 'gemini-2.5-flash-preview-09-2025') {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            if (imageData) {
+                 payload.contents[0].parts.push({
+                    inlineData: { mimeType: "image/jpeg", data: imageData }
+                });
+            }
+            
+            if (model === 'gemini-2.5-flash-image-preview') {
+                payload.generationConfig = { responseModalities: ['IMAGE'] };
+            }
+
+            console.log(`Calling model: ${model}`);
+            console.log('Payload:', JSON.stringify(payload, (key, value) => (key === 'data' && typeof value === 'string') ? value.substring(0, 50) + '...' : value, 2));
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API Error Response:', errorData);
+                    let readableError = `API request failed with status ${response.status}.`;
+                    if (errorData.error && errorData.error.message) {
+                        readableError += ` Message: ${errorData.error.message}`;
+                    }
+                    throw new Error(readableError);
+                }
+                
+                return await response.json();
+
+            } catch (error) {
+                 console.error("Fetch error:", error);
+                 throw new Error(`Network error or issue with the API call. Please check console for details. Details: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorModal.classList.remove('hidden');
+        }
+
+        function runCountdown() {
+            return new Promise(resolve => {
+                let count = 3;
+                countdownOverlay.classList.remove('hidden');
+                
+                const updateCountdown = () => {
+                    if (count > 0) {
+                        countdownOverlay.textContent = count;
+                        count--;
+                        setTimeout(updateCountdown, 1000);
+                    } else {
+                        countdownOverlay.textContent = '';
+                        countdownOverlay.classList.add('hidden');
+                        resolve();
+                    }
+                };
+                updateCountdown();
+            });
+        }
+
+        function onImageReady() {
+            // An image is now in the originalImage slot
+            captureButton.classList.add('opacity-0');
+            captureButton.disabled = true;
+            dragDropOverlay.classList.add('hidden');
+            manualInputContainer.classList.remove('hidden');
+            resetButton.classList.remove('hidden');
+        }
+
+        // --- Application Flow ---
+        async function handleCaptureClick() {
+            captureButton.classList.add('opacity-0');
+            await runCountdown();
+            takePicture(); // This now calls onImageReady()
+        }
+
+        async function handleGenerateClick() {
+            if (!capturedImageData) {
+                showError("No image captured or dropped. Please provide an image first.");
+                return;
+            }
+
+            const manualDesc = manualPromptInput.value.trim();
+            if (!manualDesc) {
+                showError("Please enter a background description.");
+                return;
+            }
+
+            statusOverlay.style.display = 'flex';
+            manualInputContainer.classList.add('hidden'); // Hide input while processing
+
+            try {
+                statusText.textContent = "Using your custom background idea...";
+                // In this flow, we use the same custom description for all 4 slots.
+                // The model might still produce slight variations.
+                const backgroundDescriptions = [manualDesc, manualDesc, manualDesc, manualDesc];
+                
+                console.log("Background Suggestions:", backgroundDescriptions);
+
+                // Generate final images
+                statusText.textContent = `Painting 4 new scenes...`;
+                
+                const imagePromises = backgroundDescriptions.map(async (desc, index) => {
+                    const finalImageResult = await callGeminiAPI(getFinalImagePrompt(desc), capturedImageData, 'gemini-2.5-flash-image');
+                    const imageBase64Data = finalImageResult?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+                    
+                    if (!imageBase64Data) {
+                        console.warn(`Image generation failed for idea ${index + 1}.`);
+                        return null;
+                    }
+                    return { data: imageBase64Data, index };
+                });
+
+                const generatedImages = (await Promise.all(imagePromises)).filter(img => img !== null);
+
+                if (generatedImages.length === 0) {
+                     throw new Error("No images were successfully generated. Please try again.");
+                }
+
+                // Display images
+                generatedImages.forEach(imgInfo => {
+                    const imgElement = generatedImageElements[imgInfo.index];
+                    const downloadLink = downloadLinkElements[imgInfo.index];
+                    
+                    imgElement.src = `data:image/png;base64,${imgInfo.data}`;
+                    downloadLink.href = imgElement.src;
+                    downloadLink.download = `halloween-photobooth-${imgInfo.index + 1}.png`;
+                    downloadLink.classList.remove('hidden');
+                    imgElement.parentElement.classList.add('group');
+                });
+
+                // Done
+                statusOverlay.style.display = 'none';
+                resetButton.classList.remove('hidden'); // Ensure reset is visible
+
+            } catch (error) {
+                console.error("An error occurred during the process:", error);
+                showError(error.message);
+                resetApp(); // Reset on error
+            }
+        }
+        
+        function resetApp() {
+            captureButton.classList.remove('opacity-0');
+            captureButton.disabled = false;
+            resetButton.classList.add('hidden');
+            statusOverlay.style.display = 'none';
+            statusText.textContent = '';
+            originalImage.src = 'https://placehold.co/800x600/374151/4B5563?text=Your+Photo';
+            dragDropOverlay.classList.remove('hidden');
+            manualInputContainer.classList.add('hidden');
+            manualPromptInput.value = '';
+            capturedImageData = null;
+            
+            generatedImageElements.forEach((img, index) => {
+                img.src = `https://placehold.co/800x600/374151/4B5563?text=AI+Scene+${index + 1}`;
+                downloadLinkElements[index].classList.add('hidden');
+                img.parentElement.classList.remove('group');
+            });
+        }
+
+        // --- Drag and Drop Handlers ---
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            originalImageContainer.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            originalImageContainer.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            originalImageContainer.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const dataUrl = event.target.result;
+                        originalImage.src = dataUrl;
+                        capturedImageData = dataUrl.split(',')[1];
+                        onImageReady();
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    showError("Please drop an image file (e.g., JPEG, PNG).");
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        saveApiKeyButton.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if (key) {
+                apiKey = key;
+                apiKeyModal.classList.add('hidden');
+                setupWebcam();
+            } else {
+                showError("Please enter a valid API key.");
+            }
+        });
+
+        captureButton.addEventListener('click', handleCaptureClick);
+        generateButton.addEventListener('click', handleGenerateClick);
+        resetButton.addEventListener('click', resetApp);
+        closeModal.addEventListener('click', () => errorModal.classList.add('hidden'));
+
+        // Drag and Drop Listeners
+        originalImageContainer.addEventListener('dragover', handleDragOver);
+        originalImageContainer.addEventListener('dragleave', handleDragLeave);
+        originalImageContainer.addEventListener('drop', handleDrop);
+
+        // Set initial aspect ratio for placeholders
+        setAspectRatio(4/3); 
+
+    </script>
+</body>
+</html>
